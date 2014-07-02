@@ -1,0 +1,66 @@
+Name:                pipes-cryptohash
+Version:             999
+Synopsis:            Utilities to calculate hashes of streams
+Description:         This library provides utilities to calculate digests of
+                     @ByteString@ @pipes@ using the @cryptohash@ library.
+Stability:           experimental
+
+Homepage:            https://github.com/NicolasT/pipes-cryptohash
+Bug-Reports:         https://github.com/NicolasT/pipes-cryptohash/issues
+
+Author:              Nicolas Trangez
+Maintainer:          ikke@nicolast.be
+Copyright:           (c) 2014, Nicolas Trangez
+License:             BSD3
+License-File:        LICENSE
+
+Category:            Pipes
+Build-Type:          Simple
+Cabal-Version:       >=1.10
+
+Library
+  Exposed-Modules:     Pipes.CryptoHash
+  Build-Depends:       base >= 4.7 && < 4.8
+                     , mtl >= 2.1 && < 2.2
+                     , bifunctors >= 4.1 && < 4.2
+                     , bytestring >= 0.10 && < 0.11
+                     , cryptohash >= 0.11 && < 0.12
+                     , pipes >= 4.1 && < 4.2
+  Hs-Source-Dirs:      src
+  Default-Language:    Haskell2010
+  Ghc-Options:         -Wall
+
+Executable pipes-cryptohash-demo
+  Main-Is:            Demo.hs
+  Build-Depends:      base >= 4.7 && < 4.8
+                    , bytestring >= 0.10 && < 0.11
+                    , cryptohash >= 0.11 && < 0.12
+                    , pipes >= 4.1 && < 4.2
+                    , pipes-bytestring >= 2.1 && < 2.2
+                    , pipes-cryptohash
+  Default-Language:   Haskell2010
+  Ghc-Options:        -Wall -rtsopts
+
+Test-Suite test
+  Type:               exitcode-stdio-1.0
+  Main-Is:            Test.hs
+  Build-Depends:      base >= 4.7 && < 4.8
+                    , mtl >= 2.1 && < 2.2
+                    , bytestring >= 0.10 && < 0.11
+                    , cryptohash >= 0.11 && < 0.12
+                    , byteable >= 0.1 && < 0.2
+                    , smallcheck >= 1.1 && < 1.2
+                    , QuickCheck >= 2.7 && < 2.8
+                    , tasty >= 0.8 && < 0.9
+                    , tasty-hunit >= 0.8 && < 0.9
+                    , tasty-smallcheck >= 0.8 && < 0.9
+                    , tasty-quickcheck >= 0.8 && < 0.9
+                    , pipes >= 4.1 && < 4.2
+                    , pipes-cryptohash
+  Default-Language:   Haskell2010
+  Ghc-Options:        -Wall -rtsopts -threaded
+
+Source-Repository head
+  Type:     git
+  Location: https://github.com/NicolasT/pipes-cryptohash.git
+  Branch:   master
