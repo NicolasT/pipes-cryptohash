@@ -52,11 +52,11 @@ import Control.Monad.State.Class (MonadState, get, put)
 import Crypto.Hash (Context, Digest, HashAlgorithm(hashInit, hashFinalize), hashUpdate)
 
 
-hashInternal :: (HashAlgorithm a, Monad m)
-             => (Context a -> b -> Context a)
-             -> Context a
-             -> Producer b (Producer b m) r
-             -> Producer b m (r, Context a)
+hashInternal :: Monad m
+             => (a -> b -> a)
+             -> a
+             -> Producer b m r
+             -> Producer b m (r, a)
 hashInternal f = loop
   where
     -- Note: it's really important to be strict in @ctx@, otherwise a huge
@@ -64,7 +64,7 @@ hashInternal f = loop
     -- a big file with "+RTS -s", once with the bang and once without, and
     -- compare `maximum residency` and `total memory in use`.
     loop !ctx p =
-        next p >>=
+        lift (next p) >>=
         either
             (\r -> return (r, ctx))
             (\(b, p') -> yield b >> loop (f ctx b) p')
@@ -79,7 +79,7 @@ hashInternal f = loop
 -- into a single 'Producer' for some reason.
 hashContext :: (HashAlgorithm a, Monad m)
             => Context a  -- ^ Initial 'Context'
-            -> Producer BS.ByteString (Producer BS.ByteString m) r  -- ^ Source 'Producer'
+            -> Producer BS.ByteString m r  -- ^ Source 'Producer'
             -> Producer BS.ByteString m (r, Context a)
 hashContext = hashInternal hashUpdate
 
@@ -87,7 +87,7 @@ hashContext = hashInternal hashUpdate
 -- which calculates a 'Digest' on the go. This 'Digest' will be tupled with
 -- the result of the original 'Producer' when the stream ends.
 hash :: (HashAlgorithm a, Monad m)
-     => Producer BS.ByteString (Producer BS.ByteString m) r  -- ^ Source 'Producer'
+     => Producer BS.ByteString m r  -- ^ Source 'Producer'
      -> Producer BS.ByteString m (r, Digest a)
 hash = fmap (second hashFinalize) . hashContext hashInit
 {-# INLINEABLE hash #-}
@@ -98,7 +98,7 @@ hash = fmap (second hashFinalize) . hashContext hashInit
 -- type-signatures to select a hash method.
 hashAlg :: (HashAlgorithm a, Monad m)
         => a  -- ^ Algorithm to use
-        -> Producer BS.ByteString (Producer BS.ByteString m) r  -- ^ Source 'Producer'
+        -> Producer BS.ByteString m r  -- ^ Source 'Producer'
         -> Producer BS.ByteString m (r, Digest a)
 hashAlg _ = hash
 {-# INLINEABLE hashAlg #-}
@@ -107,13 +107,13 @@ hashAlg _ = hash
 -- | Like 'hashContext', but for lazy 'LBS.ByteString's
 hashLazyContext :: (HashAlgorithm a, Monad m)
                 => Context a  -- ^ Initial 'Context'
-                -> Producer LBS.ByteString (Producer LBS.ByteString m) r  -- ^ Source 'Producer'
+                -> Producer LBS.ByteString m r  -- ^ Source 'Producer'
                 -> Producer LBS.ByteString m (r, Context a)
 hashLazyContext = hashInternal (LBS.foldlChunks hashUpdate)
 
 -- | Like 'hash', but for lazy 'LBS.ByteString's
 hashLazy :: (HashAlgorithm a, Monad m)
-         => Producer LBS.ByteString (Producer LBS.ByteString m) r  -- ^ Source 'Producer'
+         => Producer LBS.ByteString m r  -- ^ Source 'Producer'
          -> Producer LBS.ByteString m (r, Digest a)
 hashLazy = fmap (second hashFinalize) . hashLazyContext hashInit
 {-# INLINEABLE hashLazy #-}
@@ -121,7 +121,7 @@ hashLazy = fmap (second hashFinalize) . hashLazyContext hashInit
 -- | Like 'hashAlg', but for lazy 'LBS.ByteString's
 hashLazyAlg :: (HashAlgorithm a, Monad m)
             => a  -- ^ Algorithm to use
-            -> Producer LBS.ByteString (Producer LBS.ByteString m) r  -- ^ Source 'Producer'
+            -> Producer LBS.ByteString m r  -- ^ Source 'Producer'
             -> Producer LBS.ByteString m (r, Digest a)
 hashLazyAlg _ = hashLazy
 {-# INLINEABLE hashLazyAlg #-}
