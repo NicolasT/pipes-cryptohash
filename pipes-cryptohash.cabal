@@ -20,11 +20,12 @@ Cabal-Version:       >=1.10
 
 Library
   Exposed-Modules:     Pipes.CryptoHash
+                     , Crypto.Hash.Fold
   Build-Depends:       base >= 4.5 && < 4.8
                      , mtl >= 2.1 && < 2.2
-                     , bifunctors >= 4.1 && < 4.2
                      , bytestring >= 0.10 && < 0.11
                      , cryptohash >= 0.11 && < 0.12
+                     , foldl >= 1.0 && < 1.1
                      , pipes >= 4.1 && < 4.2
   Hs-Source-Dirs:      src
   Default-Language:    Haskell2010

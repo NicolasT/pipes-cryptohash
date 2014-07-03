@@ -25,16 +25,20 @@ store & return the hashing 'Context'.
 
 module Pipes.CryptoHash (
     -- * Wrappers for 'Producer's
+    -- ** Strict 'BS.ByteString' 'Producer's
       hash
     , hashAlg
     , hashContext
+    -- ** Lazy 'LBS.ByteString' 'Producer's
     , hashLazy
     , hashLazyAlg
     , hashLazyContext
 
     -- * 'Pipe' interface
+    -- ** Strict 'BS.ByteString' streams
     , hashPipe
     , hashPipeAlg
+    -- ** Lazy 'LBS.ByteString' streams
     , hashPipeLazy
     , hashPipeLazyAlg
     ) where
@@ -42,33 +46,35 @@ module Pipes.CryptoHash (
 import Pipes
 import qualified Pipes.Prelude as PP
 
-import Data.Bifunctor
-
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as LBS
 
 import Control.Monad.State.Class (MonadState, get, put)
 
-import Crypto.Hash (Context, Digest, HashAlgorithm(hashInit, hashFinalize), hashUpdate)
+import Control.Foldl (purely)
 
+import Crypto.Hash (Context, Digest, HashAlgorithm, hashUpdate)
 
-hashInternal :: Monad m
-             => (a -> b -> a)
-             -> a
-             -> Producer b m r
-             -> Producer b m (r, a)
-hashInternal f = loop
+import qualified Crypto.Hash.Fold as F
+
+catWithFold :: Monad m
+            => (x -> a -> x)
+            -> x
+            -> (x -> b)
+            -> Producer a m r
+            -> Producer a m (r, b)
+catWithFold f a0 m = loop a0
   where
     -- Note: it's really important to be strict in @ctx@, otherwise a huge
     -- thunk is accumulated. If you don't believe me, run the demo twice on
     -- a big file with "+RTS -s", once with the bang and once without, and
     -- compare `maximum residency` and `total memory in use`.
-    loop !ctx p =
+    loop !a p =
         lift (next p) >>=
         either
-            (\r -> return (r, ctx))
-            (\(b, p') -> yield b >> loop (f ctx b) p')
-{-# INLINE hashInternal #-}
+            (\r -> return (r, m a))
+            (\(b, p') -> yield b >> loop (f a b) p')
+{-# INLINE catWithFold #-}
 
 
 -- | Like 'hash', but allows to pass in an existing 'Context', and retrieve
@@ -81,7 +87,8 @@ hashContext :: (HashAlgorithm a, Monad m)
             => Context a  -- ^ Initial 'Context'
             -> Producer BS.ByteString m r  -- ^ Source 'Producer'
             -> Producer BS.ByteString m (r, Context a)
-hashContext = hashInternal hashUpdate
+hashContext = purely catWithFold . F.hashContext
+{-# INLINE hashContext #-}
 
 -- | Create a 'BS.ByteString' 'Producer' wrapping a 'BS.ByteString' 'Producer'
 -- which calculates a 'Digest' on the go. This 'Digest' will be tupled with
@@ -89,7 +96,7 @@ hashContext = hashInternal hashUpdate
 hash :: (HashAlgorithm a, Monad m)
      => Producer BS.ByteString m r  -- ^ Source 'Producer'
      -> Producer BS.ByteString m (r, Digest a)
-hash = fmap (second hashFinalize) . hashContext hashInit
+hash = purely catWithFold F.hash
 {-# INLINEABLE hash #-}
 
 -- | Like 'hash', but takes a specific 'HashAlgorithm'
@@ -100,7 +107,7 @@ hashAlg :: (HashAlgorithm a, Monad m)
         => a  -- ^ Algorithm to use
         -> Producer BS.ByteString m r  -- ^ Source 'Producer'
         -> Producer BS.ByteString m (r, Digest a)
-hashAlg _ = hash
+hashAlg = purely catWithFold . F.hashAlg
 {-# INLINEABLE hashAlg #-}
 
 
@@ -109,13 +116,14 @@ hashLazyContext :: (HashAlgorithm a, Monad m)
                 => Context a  -- ^ Initial 'Context'
                 -> Producer LBS.ByteString m r  -- ^ Source 'Producer'
                 -> Producer LBS.ByteString m (r, Context a)
-hashLazyContext = hashInternal (LBS.foldlChunks hashUpdate)
+hashLazyContext = purely catWithFold . F.hashLazyContext
+{-# INLINEABLE hashLazyContext #-}
 
 -- | Like 'hash', but for lazy 'LBS.ByteString's
 hashLazy :: (HashAlgorithm a, Monad m)
          => Producer LBS.ByteString m r  -- ^ Source 'Producer'
          -> Producer LBS.ByteString m (r, Digest a)
-hashLazy = fmap (second hashFinalize) . hashLazyContext hashInit
+hashLazy = purely catWithFold F.hashLazy
 {-# INLINEABLE hashLazy #-}
 
 -- | Like 'hashAlg', but for lazy 'LBS.ByteString's
@@ -123,7 +131,7 @@ hashLazyAlg :: (HashAlgorithm a, Monad m)
             => a  -- ^ Algorithm to use
             -> Producer LBS.ByteString m r  -- ^ Source 'Producer'
             -> Producer LBS.ByteString m (r, Digest a)
-hashLazyAlg _ = hashLazy
+hashLazyAlg = purely catWithFold . F.hashLazyAlg
 {-# INLINEABLE hashLazyAlg #-}
 
 
@@ -132,7 +140,7 @@ hashPipeInternal :: MonadState s m
                  -> Pipe a a m r
 hashPipeInternal f = PP.chain (modify' . flip f)
   where
-    -- See strictness note in 'hashInternal'
+    -- See strictness note in 'catWithFold'
     modify' f' = get >>= (put $!) . f'
 {-# INLINE hashPipeInternal #-}
 
